@@ -1,5 +1,3 @@
-# Portfolio
-
 ## Hello my name is Alicia! 
 #### I am currently pursing a Masters of Environmental Science and Management at the Bren School of University of California - Santa Barbara and will be graduating in June 2024. The purpose of this repository is to complie a portfolio of R projects that highlight the coding skills I have learned throughout my educational journey.
 
