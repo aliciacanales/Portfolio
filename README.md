@@ -3,5 +3,5 @@
 
 #### This Portfolio currently contains:
 ##### 1. Spatial Data - Oil Spills in California 
-##### 2. Time Series - Salmon Abundance
+##### 2. Time Series - Salmon Abundance and Snowy Plover Growth Rates
 ##### 3. Shiny App - Coral Distribution Trends across Moorea

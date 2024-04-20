@@ -17,7 +17,7 @@ ggplot(data.frame(x = c(-2.5, 6)), aes(x)) +
                      name = "Study Sites",
                      labels = c("Coal Oil Point", "Eden Landing", "Hayward", "Huntington Beach", "Malibu Lagoon", "Ormond Beach"))
 
-##...............................time series...............................................
+##...............................Time Series...............................................
 
 ## Huntington
 huntington_ts <- ggplot(data = huntington_beach, aes(x = year, y = individuals)) +
