@@ -1,0 +1,91 @@
+---
+title: "Oil Spill Incidents in California"
+author: "Alicia Canales"
+date: "2023-03-19"
+output: 
+  html_document:
+    theme: cosmo
+    code_folding: 'hide'
+---
+
+```{r setup, include=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(here)
+library(sf)
+library(tmap)
+library(terra)
+library(dplyr)
+library(gstat)
+library(ggplot2)
+```
+
+### Overview
+
+This dataset was recorded by the California Department of Fish and Wildlife in 2008 that displays information about oil spill incidents throughout the state of California. In this report I will creating an interactive tmap that visually displays oil spill incidents in California. I will then create a choropleth map that will look at oil spill incidents by county.
+
+Data Citation: California Department of Fish and Wildlife. (2008). CA DFW Oil Spill Incident Tracking. Accessed on March 12, 2023. <https://gis.data.ca.gov/datasets/CDFW>::oil-spill-incident-tracking-ds394-1/about
+
+*Reading in data and converting shape files*
+
+```{r}
+# reading in the data
+oil_spill <- read_csv(here('data', 'oil_spill_data','Oil_Spill_Incident_Tracking_[ds394].csv'))
+
+# reading in ca_counties shape file
+ca_counties_sf <- read_sf(here('data', 'oil_spill_data','ca_counties', 'CA_Counties_TIGER2016.shp')) %>%
+  janitor::clean_names() %>%
+  select(county_name = name, land_area = aland)
+
+# st_crs(ca_counties_sf) projection WGS 84; EPSG 3857
+
+# setting the CRS to match each other
+oil_sf <- st_as_sf(oil_spill, coords = c("X","Y"), 
+           crs = st_crs(ca_counties_sf)) %>% 
+  janitor::clean_names() %>% 
+  select(county_name = localecoun, localecity,inlandmari, objectid, geometry)
+
+# st_crs(oil_sf)
+
+```
+
+### Tmap of California
+
+```{r}
+# making a tmap showing only the oil events as dots
+tmap_mode(mode = "view")
+
+# adding titles and making each data point the color red
+tm_shape(oil_sf) + 
+  tm_dots(popup.vars = TRUE, # creating interactive data points with pop up windows 
+    col = 'red') +
+  tm_layout(title = 'California Oil Spill Incidents')
+
+```
+
+### Choropleth map
+
+```{r, fig.cap= 'Figure 2. Choropleth map of California counties based on the number of inland maritime incidents. Green represents lower counts less than 50 and red represents higher counts greater than 300.'}
+
+# combining data sets together to get counts by county
+ca_join_sf <- st_join(ca_counties_sf, oil_sf)
+
+# creating new subset that will show total amount of oil events in each county 
+county_oil_sf <- ca_join_sf %>% 
+  group_by(county_name.x) %>% 
+  summarize(total_inland = sum(inlandmari == 'Inland')) # aggregating total oil spills of inland incidents
+
+
+# choropleth map showing only the counties that had the most oil spill events
+ggplot(data = county_oil_sf) +
+  geom_sf(aes(fill = total_inland), size = 5) +
+  scale_fill_gradientn(colors = c("green4","yellow2","red"),
+                       breaks = c(50, 100, 150, 200, 250, 300),
+                       labels = paste(c(50, 100, 150, 200, 250, 300))) +
+  theme_minimal() +
+  labs(fill = "Number of Oil Spill Events", title = 'California Inland Oil Spill Incidents') 
+
+```

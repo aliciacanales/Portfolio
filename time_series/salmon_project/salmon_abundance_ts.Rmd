@@ -1,0 +1,199 @@
+---
+title: 'Salmon Abundance'
+author: "Alicia Canales"
+date: "2023-03-19"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup,include=TRUE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message=FALSE, warning=FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(tidyr)
+library(here)
+library(lubridate)
+library(tsibble)
+library(feasts)
+library(slider)
+library(fable)
+library(broom)
+library(patchwork)
+```
+
+![Coho Salmon](https://www.fisheries.noaa.gov/s3/styles/full_width/s3/dam-migration/750x500-coho-salmon.jpg?itok) ![Willamette Falls Fish Ladder](https://www.nwp.usace.army.mil/Portals/24/images/Willamette_Falls_Locks_area_map.jpg?ver=2018-10-01-153840-817&timestamp=1538422736049)
+
+### Overview
+
+I will explore the trends of Coho, Jack Coho, and Steelhead salmon from data recorded January 1, 2001 to December 31, 2010. The salmon can be found at the Willamette Falls fish ladder on the Willamette River in Oregon. I will be running a time series, seasonplot, and visualizing annual counts of each species, and can be found in its respected tab.
+
+Data Citation: Columbia River DART (Data Access in Real Time). 2010.U.S. Army Corps of Engineers, NWD and Chelan, Douglas, and Grant County PUDs, Yakima Klickitat Fisheries Project, Colville Tribes Fish & Wildlife (OBMEP), Oregon Department of Fish & Wildlife, Washington Department of Fish & Wildlife
+
+Picture Citations: US Army Corps of Engineers-Portland District. Accessed on March 19, 2023. <https://www.nwp.usace.army.mil/willamette/locks/>.
+
+NOAA Fisheries. Coho Salmon. Accessed on March 19, 2023. <https://www.fisheries.noaa.gov/species/coho-salmon>.
+
+### Results {.tabset} 
+
+#### Data Wrangling
+
+```{r}
+# reading in the fish data
+fish <- read_csv(here('data', 'salmon_abundance_data','willamette_fish_passage.csv')) %>% 
+ janitor::clean_names()
+
+# Converting to a timeseries dataset with selected columns and replacing NA's with 0
+fish_data <- fish %>% 
+  mutate(date = lubridate::mdy(date)) %>% 
+  select(c('date', 'coho', 'jack_coho', 'steelhead','temp_c')) %>% 
+  replace(is.na(.), 0)
+
+# Converting to tsibble format
+fish_ts <- fish_data %>% 
+  as_tsibble(key = NULL, index = date)
+
+# Making the dataset longer
+fish_longer_ts <- fish_ts %>% 
+  pivot_longer("coho":"steelhead",
+               names_to = "species",
+               values_to = "count")
+
+# Calculating monthly mean temperature
+fish_month <- fish_ts %>% 
+  index_by(yr_mo = ~yearmonth(.)) %>% 
+  summarize(mean_monthly_temp = mean(temp_c))
+
+# cleaning data for tab 3 
+fish_t3 <- fish_data %>% 
+  pivot_longer("coho":"steelhead",
+               names_to = "species",
+               values_to = "count") %>% 
+  select(-temp_c)
+```
+
+
+#### Time Series
+
+```{r}
+## making a subset for each species then going to use patchwork to put them all together
+
+# filtering only coho data
+coho_ts<- fish_longer_ts %>%
+  filter(species == 'coho')
+
+# patch plot 1
+p_1 <- ggplot(data=coho_ts, aes(x=date, y=count)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = 'Coho', x = 'Date', y = 'Total Count')
+
+# filtering only jack coho data
+jack_ts<- fish_longer_ts %>%
+  filter(species == 'jack_coho')
+
+# patch plot 2
+p_2 <- ggplot(data=jack_ts, aes(x=date, y=count)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = 'Jack Coho', x = 'Date', y = 'Total Count')
+
+# filtering only steelhead data
+steelhead_ts<- fish_longer_ts %>%
+  filter(species == 'steelhead')
+
+# patch plot 3
+p_3 <- ggplot(data=steelhead_ts, aes(x=date, y=count)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = 'Steelhead', x = 'Date', y = 'Total Count')
+
+# patchwork plot using plot 1, 2, and 3
+p_1 + p_2 + p_3 +
+  plot_layout(ncol = 1, tag_level = 'new', guides = 'collect') +
+  plot_annotation(title = 'Coho, Jack Coho, and Steelhead Salmon Counts',
+    caption = 'Figure 1. Time series of Coho, Jack Coho, and Steelhead salmon counts between 2001 and 2010.',
+    theme = theme(plot.title = element_text(size = 16)))
+```
+
+##### Summary
+- Steelhead salmon are the most abundant in the Willamette River. While they have some seasonality, some years have more counts than others. There is no overall count trend, each year has different variation than the one before.
+- Jack Coho and Coho salmon have very little seasonality and have low counts. However, that both seem to be present at the same time in the river. 
+
+#### Seasonsplot
+
+```{r}
+# Calculating the yearly average counts for each species
+
+# coho annual average
+coho <- fish_ts %>% 
+  select(date, coho, temp_c) %>% 
+  index_by(yr_mo = ~yearmonth(.)) %>% 
+  summarize(coho_avg = mean(coho))
+
+# jack coho annual average
+j_coho <- fish_ts %>% 
+  select(date, jack_coho, temp_c) %>% 
+  index_by(yr_mo = ~yearmonth(.)) %>% 
+  summarize(jcoho_avg = mean(jack_coho))
+
+# steelhead annual average
+steelhead <- fish_ts %>% 
+  select(date, steelhead, temp_c) %>% 
+  index_by(yr_mo = ~yearmonth(.)) %>% 
+  summarize(steel_avg = mean(steelhead))
+
+# patch plot 1 of Coho ts
+p1 <- gg_season(coho, y = coho_avg)+
+  theme_minimal() +
+  labs(x = 'Month', y = 'Average Count', title = 'Coho')
+
+# patch plot 2 of Jack Coho ts
+p2 <- gg_season(j_coho, y = jcoho_avg)+
+  theme_minimal()+
+  labs(x = 'Month', y = 'Average Count', title = 'Jack Coho')
+
+# patch plot 2 of steelhead ts
+p3 <- gg_season(steelhead, y = steel_avg)+
+  theme_minimal()+
+  labs(x = 'Month', y = 'Average Count', title = 'Steelhead')
+
+# patchwork plot using plot 1, 2, 3
+p1 + p2 + p3 + 
+  plot_layout(ncol = 1, tag_level = 'new', guides = 'collect') +
+  plot_annotation(title = 'Coho, Jack Coho, and Steelhead Salmon Yearly Average', # adding title
+    caption = 'Figure 2. Coho, Jack Coho, and Steelhead Salmon average population numbers from 2001 to 2010.', # adding small caption below plot
+    theme = theme(plot.title = element_text(size = 16)))
+
+```
+
+##### Summary
+- Based on these observed patterns it seems that Coho and Jack Coho have similar seasonal passage beginning in August and ending around November. This pattern is short with the most abundant time in population being in September. 
+- Steelhead have a longer period in their seasonal passage. Their season begins in January and gradually increases until June and decreases by August. On average, Steelheads are most abundant in May/June. 
+
+#### Annual Counts by species
+
+```{r, fig.cap= 'Figure 3. Annual counts of Coho, Jack Coho, and Steelhead salmon from 2000 to 2010 in Willamette River.'}
+tab3_annual <- fish_t3 %>% 
+  mutate(year = as.Date(as.character(date),format = "%Y")) %>%
+  group_by(year, species) %>% 
+  summarize(annual_total = sum(count))
+
+ggplot(data = tab3_annual, aes(x = year, y = annual_total)) +
+  geom_line(aes(color=species)) +
+  theme_minimal() +
+  scale_x_date(date_labels = "%Y") +
+  scale_color_manual(values = c('#355c7d', '#c06c84', '#f8b195'), 
+                     labels=c('Coho Salmon',
+                               'Jack Coho Salmon',
+                               'Steelhead Salmon'))+
+  labs(title = 'Annual Counts for Salmon species from 2000 to 2010',
+    x = 'Year',
+    y = 'Total Annual Count', color = 'Species')
+```
+##### Summary
+- Steelhead annual counts have a lot of variation with major declines in late 2002 and late 2004. With a small incline mid-2005 and larger incline late 2009. 
+- Coho salmon was relatively stable with little variation until 2008 when it went through a major increase in population. 
+- Jack Coho totals were fairly stable throughout 2001-2010 with a small population increase around 2008. 
